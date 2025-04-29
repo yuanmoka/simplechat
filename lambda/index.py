@@ -4,6 +4,7 @@ import os
 import boto3
 import re  # 正規表現モジュールをインポート
 from botocore.exceptions import ClientError
+import requests  # Added for HTTP requests
 
 
 # Lambda コンテキストからリージョンを抽出する関数
@@ -20,7 +21,7 @@ bedrock_client = None
 # モデルID
 MODEL_ID = os.environ.get("MODEL_ID", "us.amazon.nova-lite-v1:0")
 
-def lambda_handler(event, context):
+""" def lambda_handler(event, context):
     try:
         # コンテキストから実行リージョンを取得し、クライアントを初期化
         global bedrock_client
@@ -136,5 +137,70 @@ def lambda_handler(event, context):
             "body": json.dumps({
                 "success": False,
                 "error": str(error)
+            })
+        } """
+
+def lambda_handler(event, context):
+    try:
+        # Parse request body
+        body = json.loads(event['body'])
+        prompt = body['prompt']
+        
+        # New ngrok API configuration
+        ngrok_url = "https://2433-35-197-158-4.ngrok-free.app/generate"
+        headers = {
+            "Content-Type": "application/json",
+        }
+        
+        # Construct request payload based on API docs
+        payload = {
+            "prompt": prompt,
+            "max_tokens": 512,  # Example parameter
+            "temperature": 0.7  # Example parameter
+        }
+
+        # Call ngrok API endpoint
+        response = requests.post(
+            ngrok_url,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        # Check for HTTP errors
+        response.raise_for_status()
+        
+        # Parse API response
+        result = response.json()
+        generated_text = result['choices'][0]['text']  # Adjust key based on actual response
+
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({
+                "success": True,
+                "generated_text": generated_text
+            })
+        }
+
+    except requests.exceptions.RequestException as e:
+        print(f"API Request Error: {str(e)}")
+        return {
+            "statusCode": 502,
+            "body": json.dumps({
+                "success": False,
+                "error": f"API Gateway Error: {str(e)}"
+            })
+        }
+    except Exception as e:
+        print(f"Unexpected Error: {str(e)}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "success": False,
+                "error": f"Internal Server Error: {str(e)}"
             })
         }
